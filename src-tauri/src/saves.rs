@@ -217,7 +217,7 @@ fn scan_save_slot(user_dir: &Path, slot: &str, modded: bool) -> Option<SaveSlot>
     let has_progress = progress_path.exists();
     let has_prefs = saves_dir.join("prefs.save").exists();
 
-    let (total_size, last_modified) = if saves_dir.exists() {
+    let (mut total_size, last_modified) = if saves_dir.exists() {
         walk_size_and_mtime(&saves_dir)
     } else {
         (0, 0)
@@ -712,7 +712,7 @@ mod tests {
         let temp_dir = std::env::temp_dir().join("test_walk_file");
         std::fs::create_dir_all(&temp_dir).unwrap();
         std::fs::write(temp_dir.join("test.txt"), "hello").unwrap();
-        let (size, _mtime) = walk_size_and_mtime(&temp_dir);
+        let (size, mtime) = walk_size_and_mtime(&temp_dir);
         assert!(size > 0);
         assert!(mtime > 0);
         std::fs::remove_dir_all(&temp_dir).ok();
