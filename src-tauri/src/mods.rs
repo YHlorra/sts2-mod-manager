@@ -608,7 +608,7 @@ fn smart_extract_rar(rar_path: &str, mods_dir: &Path) -> Result<(), String> {
             Ok(e) => e,
             Err(_) => continue,
         };
-        let name = entry.filename().to_string_lossy().into_owned();
+        let name = entry.filename.to_string_lossy().into_owned();
         if !name.ends_with(".json") { continue; }
 
         // Try to read JSON content
