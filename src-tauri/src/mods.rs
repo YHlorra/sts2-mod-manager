@@ -334,9 +334,7 @@ pub fn scan_mods_internal(game_path: &str) -> Vec<ModInfo> {
         if let Some(name) = display_names.get(&key).and_then(|v| v.as_str()) {
             mod_info.display_name = Some(name.to_string());
         }
-        if let Some(base_dir) = mod_base_dir(&mod_info.instance_key) {
-            mod_info.local_updated_at = get_mod_latest_mtime(&base_dir);
-        }
+        mod_info.local_updated_at = get_mod_latest_mtime(Path::new(&mod_info.instance_key));
     }
 
     mods
@@ -684,10 +682,8 @@ fn smart_extract_rar(rar_path: &str, mods_dir: &Path) -> Result<(), String> {
                     }
                     match a.extract() {
                         Ok(next) => {
-                            let extracted_name = Path::new(&entry_name).file_name()
-                                .map(|n| n.to_string_lossy().to_string())
-                                .unwrap_or_default();
-                            let extracted_path = Path::new(".").join(&extracted_name);
+                            // unrar extracts to CWD with full path preserved (e.g., "MyMod/file.dll" -> "./MyMod/file.dll")
+                            let extracted_path = Path::new(".").join(&entry_name);
                             if extracted_path.exists() && extracted_path != out_path {
                                 let _ = fs::rename(&extracted_path, &out_path);
                             }
