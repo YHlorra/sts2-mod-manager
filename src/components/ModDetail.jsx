@@ -7,6 +7,15 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function formatDateTime(ms) {
+  if (!ms) return null;
+  const d = new Date(ms);
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
 function isChinese(text) {
   if (!text) return false;
   return /[\u4e00-\u9fff]/.test(text);
@@ -36,6 +45,10 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
   const [urlInputValue, setUrlInputValue] = useState('');
   const [urlWarning, setUrlWarning] = useState(null);
 
+  const [displayNameValue, setDisplayNameValue] = useState(null);
+  const [displayNameEditMode, setDisplayNameEditMode] = useState(false);
+  const [displayNameInput, setDisplayNameInput] = useState('');
+
   // Load saved translations when mod changes
   useEffect(() => {
     setTranslateError(null);
@@ -49,13 +62,21 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
           setTranslatedName(null);
           setTranslatedDesc(null);
         }
+        // Load display name from _mod_display_names
+        const dn = saved._mod_display_names?.[mod.instanceKey] || saved._mod_display_names?.[mod.id] || null;
+        setDisplayNameValue(dn);
+        setDisplayNameInput(dn || '');
       }).catch(() => {
         setTranslatedName(null);
         setTranslatedDesc(null);
+        setDisplayNameValue(null);
+        setDisplayNameInput('');
       });
     } else {
       setTranslatedName(null);
       setTranslatedDesc(null);
+      setDisplayNameValue(null);
+      setDisplayNameInput('');
     }
   }, [mod.id, mod.instanceKey]);
 
@@ -126,6 +147,28 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
     }
   };
 
+  const handleDisplayNameSave = async () => {
+    setDisplayNameEditMode(false);
+    const trimmed = displayNameInput.trim();
+
+    if (trimmed !== displayNameValue) {
+      try {
+        const saved = await window.api.loadTranslations();
+        if (!saved._mod_display_names) saved._mod_display_names = {};
+        if (trimmed) {
+          saved._mod_display_names[mod.instanceKey] = trimmed;
+        } else {
+          delete saved._mod_display_names[mod.instanceKey];
+        }
+        await window.api.saveTranslations(saved);
+        setDisplayNameValue(trimmed || null);
+        if (onTranslationSaved) onTranslationSaved();
+      } catch (e) {
+        console.error('Failed to save display name:', e);
+      }
+    }
+  };
+
   const hasEnglishContent = !isChinese(mod.description) || !isChinese(mod.name);
 
   return (
@@ -153,6 +196,54 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
           </button>
         </div>
 
+        {/* Display Name */}
+        <div className="space-y-1.5">
+          <span className="text-xs text-gray-400">显示名称</span>
+          {displayNameEditMode ? (
+            <div className="flex flex-col gap-1">
+              <input
+                type="text"
+                value={displayNameInput}
+                onChange={(e) => setDisplayNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleDisplayNameSave();
+                  if (e.key === 'Escape') {
+                    setDisplayNameInput(displayNameValue || '');
+                    setDisplayNameEditMode(false);
+                  }
+                }}
+                onBlur={handleDisplayNameSave}
+                placeholder="自定义显示名称"
+                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400"
+                autoFocus
+              />
+            </div>
+          ) : displayNameValue ? (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-700">{displayNameValue}</span>
+              <button
+                onClick={() => {
+                  setDisplayNameInput(displayNameValue || '');
+                  setDisplayNameEditMode(true);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <Pencil size={12} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setDisplayNameInput('');
+                setDisplayNameEditMode(true);
+              }}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <Plus size={12} /> 添加显示名称
+            </button>
+          )}
+        </div>
+
         {/* Category badge */}
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ${category.color}`}>
@@ -173,6 +264,7 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
             ['版本', mod.version || '未知'],
             ['大小', formatSize(mod.size)],
             ['类型', mod.isFolder ? '文件夹 MOD' : '独立文件 MOD'],
+            ...(mod.localUpdatedAt ? [['本地更新', formatDateTime(mod.localUpdatedAt)]] : []),
           ].map(([label, value]) => (
             <div key={label} className="flex items-center justify-between">
               <span className="text-xs text-gray-400">{label}</span>
