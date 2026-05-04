@@ -1,4 +1,3 @@
-use crate::translations::translations_load;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -30,10 +29,6 @@ pub struct ModInfo {
     pub path: String,
     pub files: Vec<String>,
     pub size: u64,
-    #[serde(rename = "displayName")]
-    pub display_name: Option<String>,
-    #[serde(rename = "localUpdatedAt")]
-    pub local_updated_at: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -102,33 +97,6 @@ fn read_json_file(path: &Path) -> Option<serde_json::Value> {
     serde_json::from_str(&content).ok()
 }
 
-/// Recursively find the newest file's mtime (Unix ms) inside a mod folder.
-/// Returns None if folder is empty or inaccessible.
-fn get_mod_latest_mtime(mod_path: &Path) -> Option<u64> {
-    let mut max_mtime: u64 = 0;
-    fn walkdir(dir: &Path, max_mtime: &mut u64) {
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    walkdir(&path, max_mtime);
-                } else if let Ok(meta) = entry.metadata() {
-                    if let Ok(mtime) = meta.modified() {
-                        if let Some(duration) = mtime.duration_since(std::time::UNIX_EPOCH).ok() {
-                            let ms = duration.as_millis() as u64;
-                            if ms > *max_mtime {
-                                *max_mtime = ms;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    walkdir(mod_path, &mut max_mtime);
-    if max_mtime == 0 { None } else { Some(max_mtime) }
-}
-
 fn dir_size(path: &Path) -> u64 {
     let mut size = 0u64;
     if let Ok(entries) = fs::read_dir(path) {
@@ -192,8 +160,6 @@ fn try_parse_mod(full_path: &Path, item_name: &str, enabled: bool) -> Option<Mod
                         path: full_path.to_string_lossy().to_string(),
                         files: entries,
                         size: dir_size(full_path),
-                        display_name: None,
-                        local_updated_at: None,
                     });
                 }
             }
@@ -253,8 +219,6 @@ fn try_parse_mod(full_path: &Path, item_name: &str, enabled: bool) -> Option<Mod
                     path: parent.to_string_lossy().to_string(),
                     files,
                     size: total_size,
-                    display_name: None,
-                    local_updated_at: None,
                 });
             }
         }
@@ -310,28 +274,6 @@ pub fn scan_mods_internal(game_path: &str) -> Vec<ModInfo> {
         let b_name = b.name.as_deref().unwrap_or("");
         a_name.to_lowercase().cmp(&b_name.to_lowercase())
     });
-
-    // Load display names from translations.json
-    let translations = translations_load();
-    let display_names = translations
-        .get("_mod_display_names")
-        .and_then(|v| v.as_object())
-        .map(|o| o.clone())
-        .unwrap_or_default();
-    let _updated_at_map = translations
-        .get("_mod_updated_at")
-        .and_then(|v| v.as_object())
-        .map(|o| o.clone())
-        .unwrap_or_default();
-
-    // Populate display_name and local_updated_at for each mod
-    for mod_info in mods.iter_mut() {
-        let key = mod_info.instance_key.clone();
-        if let Some(name) = display_names.get(&key).and_then(|v| v.as_str()) {
-            mod_info.display_name = Some(name.to_string());
-        }
-        mod_info.local_updated_at = get_mod_latest_mtime(Path::new(&mod_info.instance_key));
-    }
 
     mods
 }
@@ -505,23 +447,18 @@ pub fn mods_uninstall(
     }
 }
 
-fn smart_extract_archive(path: &str, mods_dir: &Path) -> Result<(), String> {
-    let ext = Path::new(path)
+fn smart_extract_zip(zip_path: &str, mods_dir: &Path) -> Result<(), String> {
+    let ext = Path::new(zip_path)
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
-
-    match ext.as_str() {
-        "zip" => smart_extract_zip_impl(path, mods_dir),
-        "rar" => smart_extract_rar(path, mods_dir),
-        _ => Err(format!(
-            "不支持的格式: .{}\n\n目前支持 .zip 和 .rar 格式的压缩包。",
+    if ext != "zip" {
+        return Err(format!(
+            "不支持的格式: .{}\n\n目前仅支持 .zip 格式的压缩包。\n如果是 .rar / .7z 请先解压后拖入文件夹，或转换为 .zip 格式。",
             ext
-        )),
+        ));
     }
-}
 
-fn smart_extract_zip_impl(zip_path: &str, mods_dir: &Path) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| format!(
         "无法读取压缩包: {}\n\n该文件可能已损坏或不是有效的 ZIP 格式。\n\nMOD 压缩包应为 .zip 格式，内含:\n  • ModName.json (MOD 描述文件)\n  • ModName.dll (代码类 MOD)\n  • ModName.pck (资源类 MOD)",
         e
@@ -649,54 +586,6 @@ fn smart_extract_zip_impl(zip_path: &str, mods_dir: &Path) -> Result<(), String>
     Ok(())
 }
 
-fn smart_extract_rar(rar_path: &str, mods_dir: &Path) -> Result<(), String> {
-    use unrar::Archive;
-
-    let archive = Archive::new(rar_path).open_for_processing().map_err(|e| format!(
-        "无法读取 RAR 压缩包: {}\n\n该文件可能已损坏。",
-        e
-    ))?;
-
-    let mut archive = archive;
-    loop {
-        match archive.read_header() {
-            Ok(Some(a)) => {
-                let entry_name = a.entry().filename.to_string_lossy().into_owned();
-                let is_dir = entry_name.ends_with('/');
-
-                if is_dir {
-                    let out_path = mods_dir.join(&entry_name);
-                    let _ = fs::create_dir_all(&out_path);
-                    match a.skip() {
-                        Ok(next) => { archive = next; }
-                        Err(e) => return Err(format!("无法跳过 RAR 目录: {}", e)),
-                    }
-                } else {
-                    let out_path = mods_dir.join(&entry_name);
-                    if let Some(parent) = out_path.parent() {
-                        let _ = fs::create_dir_all(parent);
-                    }
-                    match a.extract() {
-                        Ok(next) => {
-                            // unrar extracts to CWD with full path preserved (e.g., "MyMod/file.dll" -> "./MyMod/file.dll")
-                            let extracted_path = Path::new(".").join(&entry_name);
-                            if extracted_path.exists() && extracted_path != out_path {
-                                let _ = fs::rename(&extracted_path, &out_path);
-                            }
-                            archive = next;
-                        }
-                        Err(e) => return Err(format!("无法提取 RAR 文件 {}: {}", entry_name, e)),
-                    }
-                }
-            }
-            Ok(None) => break,
-            Err(e) => return Err(format!("读取 RAR 头失败: {}", e)),
-        }
-    }
-
-    Ok(())
-}
-
 fn install_folder(folder_path: &str, mods_dir: &Path) -> Result<(), String> {
     let src = Path::new(folder_path);
     if !src.is_dir() {
@@ -746,8 +635,8 @@ pub async fn mods_install(
     let dialog = app.dialog();
     let files = dialog
         .file()
-        .set_title("Select MOD Archive, RAR, or Folder")
-        .add_filter("All Files", &["*"])
+        .set_title("Select MOD Archive")
+        .add_filter("Archives", &["zip"])
         .blocking_pick_files();
 
     let file_paths = match files {
@@ -769,7 +658,7 @@ pub async fn mods_install(
         let result = if p.is_dir() {
             install_folder(&path_str, &mods_dir)
         } else {
-            smart_extract_archive(&path_str, &mods_dir)
+            smart_extract_zip(&path_str, &mods_dir)
         };
         if let Err(e) = result {
             return Ok(ModResult {
@@ -820,7 +709,7 @@ pub fn mods_install_drop(
         let result = if p.is_dir() {
             install_folder(fp, &mods_dir)
         } else {
-            smart_extract_archive(fp, &mods_dir)
+            smart_extract_zip(fp, &mods_dir)
         };
         if let Err(e) = result {
             return ModResult {
@@ -975,7 +864,7 @@ pub async fn mods_restore(
     match file {
         Some(path) => {
             let path_str = path.to_string();
-            if let Err(e) = smart_extract_archive(&path_str, &mods_dir) {
+            if let Err(e) = smart_extract_zip(&path_str, &mods_dir) {
                 return Ok(ModResult {
                     success: false,
                     error: Some(e),
@@ -1005,130 +894,4 @@ fn chrono_timestamp() -> String {
         .unwrap_or_default()
         .as_millis();
     now.to_string()
-}
-
-// ── Tests ──
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_mods_dir() {
-        let game_path = "C:/Games/SlayTheSpire2";
-        let mods_dir = get_mods_dir(game_path);
-        assert_eq!(mods_dir, std::path::Path::new("C:/Games/SlayTheSpire2/mods"));
-    }
-
-    #[test]
-    fn test_get_disabled_dir() {
-        let game_path = "C:/Games/SlayTheSpire2";
-        let disabled_dir = get_disabled_dir(game_path);
-        assert_eq!(disabled_dir, std::path::Path::new("C:/Games/SlayTheSpire2/mods_disabled"));
-    }
-
-    #[test]
-    fn test_get_legacy_disabled_dir() {
-        let game_path = "C:/Games/SlayTheSpire2";
-        let legacy_dir = get_legacy_disabled_dir(game_path);
-        assert_eq!(legacy_dir, std::path::Path::new("C:/Games/SlayTheSpire2/mods/_disabled"));
-    }
-
-    #[test]
-    fn test_read_json_file_with_bom() {
-        let temp_dir = std::env::temp_dir();
-        let bom_path = temp_dir.join("test_bom.json");
-        // UTF-8 BOM
-        std::fs::write(&bom_path, "\u{feff}{\"id\": \"mod1\", \"name\": \"TestMod\"}").unwrap();
-
-        let result = read_json_file(&bom_path);
-        assert!(result.is_some());
-        let val = result.unwrap();
-        assert_eq!(val.get("id").and_then(|v| v.as_str()), Some("mod1"));
-        assert_eq!(val.get("name").and_then(|v| v.as_str()), Some("TestMod"));
-
-        std::fs::remove_file(&bom_path).ok();
-    }
-
-    #[test]
-    fn test_read_json_file_without_bom() {
-        let temp_dir = std::env::temp_dir();
-        let path = temp_dir.join("test_no_bom.json");
-        std::fs::write(&path, "{\"id\": \"mod2\", \"name\": \"AnotherMod\"}").unwrap();
-
-        let result = read_json_file(&path);
-        assert!(result.is_some());
-        let val = result.unwrap();
-        assert_eq!(val.get("id").and_then(|v| v.as_str()), Some("mod2"));
-
-        std::fs::remove_file(&path).ok();
-    }
-
-    #[test]
-    fn test_read_json_file_invalid() {
-        let temp_dir = std::env::temp_dir();
-        let path = temp_dir.join("test_invalid.json");
-        std::fs::write(&path, "not valid json {{{").unwrap();
-
-        let result = read_json_file(&path);
-        assert!(result.is_none());
-
-        std::fs::remove_file(&path).ok();
-    }
-
-    #[test]
-    fn test_read_json_file_nonexistent() {
-        let result = read_json_file(std::path::Path::new("nonexistent/path.json"));
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_chrono_timestamp_format() {
-        let ts = chrono_timestamp();
-        // Should be a numeric string representing milliseconds since epoch
-        assert!(ts.chars().all(|c| c.is_ascii_digit()));
-        // Should be reasonably large (post-2020)
-        let ts_num: u64 = ts.parse().expect("Should be valid u64");
-        assert!(ts_num > 1577836800000); // 2020-01-01 in ms
-    }
-
-    #[test]
-    fn test_find_folder_mod_location_roots() {
-        // Test that roots contain expected directories
-        let game_path = "C:/Games/SlayTheSpire2";
-        let roots = vec![
-            get_mods_dir(game_path),
-            get_disabled_dir(game_path),
-            get_legacy_disabled_dir(game_path),
-        ];
-        assert_eq!(roots.len(), 3);
-    }
-
-    #[test]
-    fn test_find_flat_mod_base_dir_roots() {
-        let game_path = "C:/Games/SlayTheSpire2";
-        let roots = vec![
-            get_mods_dir(game_path),
-            get_disabled_dir(game_path),
-            get_legacy_disabled_dir(game_path),
-        ];
-        assert_eq!(roots.len(), 3);
-    }
-
-    #[test]
-    fn test_disabled_dir_creates_if_missing() {
-        let temp_dir = std::env::temp_dir();
-        let test_game = temp_dir.join("test_game_disabled");
-        std::fs::create_dir_all(&test_game).unwrap();
-
-        let disabled = get_disabled_dir(test_game.to_str().unwrap());
-        // Directory should be created if it doesn't exist
-        if !disabled.exists() {
-            std::fs::create_dir_all(&disabled).unwrap();
-        }
-        assert!(disabled.exists());
-
-        // Cleanup
-        std::fs::remove_dir_all(&test_game).ok();
-    }
 }

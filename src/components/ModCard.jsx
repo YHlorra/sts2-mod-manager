@@ -7,22 +7,6 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-function formatRelativeTime(ms) {
-  if (!ms) return null;
-  const now = Date.now();
-  const diff = now - ms;
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return '刚刚';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} 分钟前`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} 天前`;
-  const date = new Date(ms);
-  return date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-}
-
 function getMissingDeps(mod, allMods) {
   if (!mod.dependencies || mod.dependencies.length === 0) return [];
   const allIds = allMods.map(m => m.id);
@@ -68,12 +52,9 @@ export default function ModCard({ mod, allMods, translations, onToggle, onClick,
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-sm truncate">{mod.displayName || (t && t.name) || mod.name}</h3>
+            <h3 className="font-semibold text-sm truncate">{(t && t.name) || mod.name}</h3>
           </div>
-          {mod.localUpdatedAt && (
-            <p className="text-[11px] text-gray-400 mt-0.5">更新: {formatRelativeTime(mod.localUpdatedAt)}</p>
-          )}
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 mt-0.5">
             {mod.author} · v{mod.version}
           </p>
         </div>

@@ -241,10 +241,10 @@ export default function App() {
     e.preventDefault();
     setDragOver(false);
     const paths = Array.from(e.dataTransfer.files)
-      .filter(f => f.name.endsWith('.zip') || f.name.endsWith('.rar') || !f.name.includes('.') || f.type === '')
+      .filter(f => f.name.endsWith('.zip') || !f.name.includes('.') || f.type === '')
       .map(f => f.path);
     if (paths.length === 0) {
-      showToast('请拖入 .zip 或 .rar 压缩包，或 MOD 文件夹', 'error');
+      showToast('请拖入 .zip 压缩包或 MOD 文件夹', 'error');
       return;
     }
     const result = await window.api.installDrop(paths);
@@ -569,12 +569,12 @@ export default function App() {
                             <p className="text-xs text-gray-400">启动游戏确认 MOD 正常加载</p>
                           </div>
                         </div>
-                        <p className="text-xs text-gray-300 mt-6">支持 .zip 和 .rar 格式，也可以直接拖放到窗口任意位置</p>
+                        <p className="text-xs text-gray-300 mt-6">支持 .zip 格式，也可以直接拖放到窗口任意位置</p>
                       </div>
                     ) : filteredMods.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-gray-400">
                         <p className="text-lg font-medium">{search ? '没有找到匹配的 MOD' : '暂无 MOD'}</p>
-                        <p className="text-sm mt-1">拖拽压缩包文件到此处安装</p>
+                        <p className="text-sm mt-1">拖拽 ZIP 文件到此处安装</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS2 Mod Manager</title>
+  <link rel="stylesheet" href="output.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+    .titlebar { -webkit-app-region: drag; }
+    .titlebar button { -webkit-app-region: no-drag; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    window.onerror = function(msg, src, line, col, err) {
+      document.getElementById('root').innerHTML =
+        '<div style="padding:40px;font-family:monospace;color:#dc2626;background:#fef2f2;margin:20px;border-radius:8px;border:1px solid #fca5a5">' +
+        '<h2 style="margin-bottom:12px">启动错误</h2>' +
+        '<p><b>Error:</b> ' + msg + '</p>' +
+        '<p><b>Source:</b> ' + src + ':' + line + ':' + col + '</p>' +
+        '<pre style="margin-top:12px;white-space:pre-wrap;font-size:12px">' + (err && err.stack ? err.stack : '') + '</pre>' +
+        '<p style="margin-top:16px;color:#666">请将此信息截图反馈</p></div>';
+    };
+  </script>
+  <script src="renderer.js"></script>
+</body>
+</html>

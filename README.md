@@ -30,21 +30,17 @@
 
 | | 功能 | 说明 |
 |---|---|---|
-| 📦 | **MOD 管理** | 安装 / 卸载 / 启用 / 禁用，支持拖拽 `.zip` `.rar` `.folder` 直接安装 |
-| 📁 | **安装对话框** | 支持选择文件/文件夹进行安装，可安装文件夹、ZIP 或 RAR 包 |
-| 🖼️ | **智能解压** | ZIP/RAR 自动解压到以 MOD 命名的子文件夹，无需手动整理 |
-| 🏷️ | **自定义名称** | 可为每个 MOD 设置中文显示名，名称保存到本地 |
-| ⏰ | **本地更新时间** | 显示每个 MOD 文件夹的最后修改时间，方便追踪更新 |
-| 🔧 | **风险信号** | 自动标出缺失依赖、区分框架前置 / 玩法改动 / 资源类 MOD，一眼看清能不能安全启用 |
+| 📦 | **MOD 管理** | 安装 / 卸载 / 启用 / 禁用，支持拖拽 `.zip` `.rar` 直接安装 |
+| �️ | **风险信号** | 自动标出缺失依赖、区分框架前置 / 玩法改动 / 资源类 MOD，一眼看清能不能安全启用 |
 | 🔗 | **依赖跳转** | 详情面板中点击依赖项直接跳转到对应 MOD |
 | 🔀 | **智能排序** | 按名称 / 依赖问题优先 / 影响玩法 / 分类 / 大小排序 |
 | 🖼️ | **双视图模式** | 卡片网格视图（默认）和双栏列表视图随时切换 |
 | 🧭 | **首次引导** | 3 步卡片式引导流程：选目录 → 装 MOD → 启动验证，新手友好 |
 | ⚠️ | **操作确认** | 卸载、批量卸载、应用配置、还原备份等风险操作弹出确认，说明后果再执行 |
-| 💾 | **存档管理** | 普通存档 & MOD 存档分开展示，一键导出备份、导入还原 |
+| �💾 | **存档管理** | 普通存档 & MOD 存档分开展示，一键导出备份、导入还原 |
 | 📋 | **游戏日志** | 实时查看最新日志，出问题秒定位 |
 | 🔍 | **崩溃分析** | 游戏退出后自动扫日志，精确到哪个 MOD 炸了 |
-| 🌐 | **MOD 翻译** | 英文描述看不懂？一键翻译成中文，翻译结果本地保存 |
+| 🌐 | **MOD 翻译** | 英文描述看不懂？一键翻译成中文 |
 | ⚙️ | **配置档案** | 保存 MOD 启用方案，联机 / 单机随时切换 |
 | 🚀 | **启动游戏** | Steam 正版、非 Steam 版都支持，自动识别 |
 
@@ -70,10 +66,10 @@
 ## 🛠 本地开发
 
 ```bash
-pnpm install              # 装依赖
-pnpm run tauri:dev       # Tauri 开发模式
-pnpm run tauri:build     # Tauri 打包
-pnpm run dev             # Electron 开发模式
+npm install              # 装依赖
+npm run tauri:dev        # Tauri 开发模式
+npm run tauri:build      # Tauri 打包
+npm run dev              # Electron 开发模式
 ```
 
 > Tauri 打包需要 [Rust](https://rustup.rs/) + [VS Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（勾选 C++ 桌面开发）
@@ -86,7 +82,7 @@ pnpm run dev             # Electron 开发模式
 前端    React 18 + TailwindCSS + Lucide Icons
 后端    Rust (Tauri v2)
 打包    NSIS 安装包 (~4MB)
-持久化  AppData 存储翻译和显示名 (translations.json)
+备选    Electron 版本代码也保留着
 ```
 
 <br>
@@ -96,11 +92,10 @@ pnpm run dev             # Electron 开发模式
 ```
 src/              前端源码 (React)
 src-tauri/        后端源码 (Rust)
-dist/             Webpack 构建产物
-dist-tauri/       Tauri 前端构建产物
+dist-tauri/       前端构建产物
+main.js           Electron 主进程
+preload.js        Electron 预加载
 docs/             截图素材
-main.js           Electron 主进程 (备选)
-preload.js        Electron 预加载 (备选)
 ```
 
 <br>

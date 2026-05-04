@@ -1,19 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, ToggleLeft, ToggleRight, Trash2, AlertTriangle, FileText, Box, Code, Languages, ExternalLink, Shield, Gamepad2, Palette, Pencil, Plus } from 'lucide-react';
+import { X, ToggleLeft, ToggleRight, Trash2, AlertTriangle, FileText, Box, Code, Languages, ExternalLink, Shield, Gamepad2, Palette } from 'lucide-react';
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
-
-function formatDateTime(ms) {
-  if (!ms) return null;
-  const d = new Date(ms);
-  return d.toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit'
-  });
 }
 
 function isChinese(text) {
@@ -40,15 +31,6 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
   const [translating, setTranslating] = useState(false);
   const [translateError, setTranslateError] = useState(null);
 
-  const [nexusUrl, setNexusUrl] = useState(null);
-  const [urlEditMode, setUrlEditMode] = useState(false);
-  const [urlInputValue, setUrlInputValue] = useState('');
-  const [urlWarning, setUrlWarning] = useState(null);
-
-  const [displayNameValue, setDisplayNameValue] = useState(null);
-  const [displayNameEditMode, setDisplayNameEditMode] = useState(false);
-  const [displayNameInput, setDisplayNameInput] = useState('');
-
   // Load saved translations when mod changes
   useEffect(() => {
     setTranslateError(null);
@@ -62,37 +44,13 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
           setTranslatedName(null);
           setTranslatedDesc(null);
         }
-        // Load display name from _mod_display_names
-        const dn = saved._mod_display_names?.[mod.instanceKey] || saved._mod_display_names?.[mod.id] || null;
-        setDisplayNameValue(dn);
-        setDisplayNameInput(dn || '');
       }).catch(() => {
         setTranslatedName(null);
         setTranslatedDesc(null);
-        setDisplayNameValue(null);
-        setDisplayNameInput('');
       });
     } else {
       setTranslatedName(null);
       setTranslatedDesc(null);
-      setDisplayNameValue(null);
-      setDisplayNameInput('');
-    }
-  }, [mod.id, mod.instanceKey]);
-
-  // Load saved URL
-  useEffect(() => {
-    setUrlEditMode(false);
-    setUrlWarning(null);
-    if (window.api.loadTranslations) {
-      window.api.loadTranslations().then(saved => {
-        const url = saved._nexus_urls?.[mod.id]?.url || null;
-        setNexusUrl(url);
-        setUrlInputValue(url || '');
-      }).catch(() => {
-        setNexusUrl(null);
-        setUrlInputValue('');
-      });
     }
   }, [mod.id, mod.instanceKey]);
 
@@ -123,52 +81,6 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
     setTranslating(false);
   };
 
-  const handleUrlSave = async () => {
-    setUrlEditMode(false);
-    const trimmed = urlInputValue.trim();
-
-    // Validate format (warn only, do not reject)
-    if (trimmed && !trimmed.match(/^https?:\/\//)) {
-      setUrlWarning('链接格式异常，可能无法正常打开');
-    } else {
-      setUrlWarning(null);
-    }
-
-    if (trimmed !== nexusUrl) {
-      try {
-        const saved = await window.api.loadTranslations();
-        if (!saved._nexus_urls) saved._nexus_urls = {};
-        saved._nexus_urls[mod.id] = { url: trimmed };
-        await window.api.saveTranslations(saved);
-        setNexusUrl(trimmed);
-      } catch (e) {
-        console.error('Failed to save URL:', e);
-      }
-    }
-  };
-
-  const handleDisplayNameSave = async () => {
-    setDisplayNameEditMode(false);
-    const trimmed = displayNameInput.trim();
-
-    if (trimmed !== displayNameValue) {
-      try {
-        const saved = await window.api.loadTranslations();
-        if (!saved._mod_display_names) saved._mod_display_names = {};
-        if (trimmed) {
-          saved._mod_display_names[mod.instanceKey] = trimmed;
-        } else {
-          delete saved._mod_display_names[mod.instanceKey];
-        }
-        await window.api.saveTranslations(saved);
-        setDisplayNameValue(trimmed || null);
-        if (onTranslationSaved) onTranslationSaved();
-      } catch (e) {
-        console.error('Failed to save display name:', e);
-      }
-    }
-  };
-
   const hasEnglishContent = !isChinese(mod.description) || !isChinese(mod.name);
 
   return (
@@ -196,54 +108,6 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
           </button>
         </div>
 
-        {/* Display Name */}
-        <div className="space-y-1.5">
-          <span className="text-xs text-gray-400">显示名称</span>
-          {displayNameEditMode ? (
-            <div className="flex flex-col gap-1">
-              <input
-                type="text"
-                value={displayNameInput}
-                onChange={(e) => setDisplayNameInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleDisplayNameSave();
-                  if (e.key === 'Escape') {
-                    setDisplayNameInput(displayNameValue || '');
-                    setDisplayNameEditMode(false);
-                  }
-                }}
-                onBlur={handleDisplayNameSave}
-                placeholder="自定义显示名称"
-                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400"
-                autoFocus
-              />
-            </div>
-          ) : displayNameValue ? (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-700">{displayNameValue}</span>
-              <button
-                onClick={() => {
-                  setDisplayNameInput(displayNameValue || '');
-                  setDisplayNameEditMode(true);
-                }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <Pencil size={12} />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => {
-                setDisplayNameInput('');
-                setDisplayNameEditMode(true);
-              }}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <Plus size={12} /> 添加显示名称
-            </button>
-          )}
-        </div>
-
         {/* Category badge */}
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ${category.color}`}>
@@ -264,76 +128,12 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
             ['版本', mod.version || '未知'],
             ['大小', formatSize(mod.size)],
             ['类型', mod.isFolder ? '文件夹 MOD' : '独立文件 MOD'],
-            ...(mod.localUpdatedAt ? [['本地更新', formatDateTime(mod.localUpdatedAt)]] : []),
           ].map(([label, value]) => (
             <div key={label} className="flex items-center justify-between">
               <span className="text-xs text-gray-400">{label}</span>
               <span className="text-xs text-gray-700 font-medium">{value}</span>
             </div>
           ))}
-        </div>
-
-        {/* URL row */}
-        <div className="space-y-1.5">
-          {urlEditMode ? (
-            <div className="flex flex-col gap-1">
-              <input
-                type="text"
-                value={urlInputValue}
-                onChange={(e) => {
-                  setUrlInputValue(e.target.value);
-                  setUrlWarning(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleUrlSave();
-                  if (e.key === 'Escape') {
-                    setUrlInputValue(nexusUrl || '');
-                    setUrlEditMode(false);
-                    setUrlWarning(null);
-                  }
-                }}
-                onBlur={handleUrlSave}
-                placeholder="https://nexusmods.com/mods/..."
-                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400"
-                autoFocus
-              />
-              {urlWarning && (
-                <p className="text-[11px] text-amber-500">{urlWarning}</p>
-              )}
-            </div>
-          ) : nexusUrl ? (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">链接</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => window.api.openUrl(nexusUrl)}
-                  className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors"
-                >
-                  <ExternalLink size={12} />
-                  {nexusUrl.length > 30 ? nexusUrl.slice(0, 30) + '...' : nexusUrl}
-                </button>
-                <button
-                  onClick={() => {
-                    setUrlInputValue(nexusUrl || '');
-                    setUrlEditMode(true);
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <Pencil size={12} />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => {
-                setUrlInputValue('');
-                setUrlEditMode(true);
-              }}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <Plus size={12} /> 添加链接
-            </button>
-          )}
         </div>
 
         {/* Description */}

@@ -1,43 +1,20 @@
-# Dependencies
 node_modules/
-
-# Build outputs
-dist/
-dist-tauri/
 release/
-builds/
-src-tauri/target/
-
-# Electron build artifacts
-*.exe
+dist/win-unpacked/
+dist/builder-debug.yml
+dist/*.exe
+test_*.js
 *.zip
 .DS_Store
 Thumbs.db
 
-# Logs and temp files
-*.log
-launch.log
+# Tauri
+src-tauri/target/
+dist-tauri/renderer.js
+dist-tauri/renderer.js.LICENSE.txt
 
-# IDE and OS
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Test files
-test_*.js
+# Build outputs
+builds/
 
 # Temp screenshots (hash-named)
 /[0-9a-f][0-9a-f][0-9a-f]*.png
-
-# Agent / Claude context
-.claude/
-.omc/**
-.github/**
-
-# Agent instructions and project memory
-CLAUDE.md
-AGENTS.md
-
-# Planning docs (not project code)
-.planning/
