@@ -70,10 +70,6 @@ fn get_legacy_disabled_dir(game_path: &str) -> PathBuf {
     get_mods_dir(game_path).join(LEGACY_DISABLED_DIR)
 }
 
-fn mod_base_dir(instance_key: &str) -> Option<PathBuf> {
-    Path::new(instance_key).parent().map(|p| p.to_path_buf())
-}
-
 fn migrate_legacy_disabled(game_path: &str) {
     let legacy = get_legacy_disabled_dir(game_path);
     let disabled = get_disabled_dir(game_path);
