@@ -66,10 +66,10 @@
 ## 🛠 本地开发
 
 ```bash
-npm install              # 装依赖
-npm run tauri:dev        # Tauri 开发模式
-npm run tauri:build      # Tauri 打包
-npm run dev              # Electron 开发模式
+pnpm install              # 装依赖
+pnpm run tauri:dev       # Tauri 开发模式
+pnpm run tauri:build     # Tauri 打包
+pnpm run dev             # Electron 开发模式
 ```
 
 > Tauri 打包需要 [Rust](https://rustup.rs/) + [VS Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（勾选 C++ 桌面开发）
