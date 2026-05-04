@@ -8,7 +8,6 @@ mod translate;
 mod translations;
 
 use std::sync::Mutex;
-use tauri::Manager;
 
 pub struct AppState {
     pub game_path: Mutex<Option<String>>,
