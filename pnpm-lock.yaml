@@ -11,9 +11,6 @@ importers:
       adm-zip:
         specifier: ^0.5.10
         version: 0.5.17
-      electron:
-        specifier: ^41.5.0
-        version: 41.5.0
       lucide-react:
         specifier: ^0.344.0
         version: 0.344.0(react@18.3.1)
@@ -54,6 +51,9 @@ importers:
       css-loader:
         specifier: ^6.10.0
         version: 6.11.0(webpack@5.106.2)
+      electron:
+        specifier: 41.5.0
+        version: 41.5.0
       electron-builder:
         specifier: ^24.13.0
         version: 24.13.3(electron-builder-squirrel-windows@24.13.3)
