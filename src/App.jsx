@@ -569,12 +569,12 @@ export default function App() {
                             <p className="text-xs text-gray-400">启动游戏确认 MOD 正常加载</p>
                           </div>
                         </div>
-                        <p className="text-xs text-gray-300 mt-6">支持 .zip 格式，也可以直接拖放到窗口任意位置</p>
+                        <p className="text-xs text-gray-300 mt-6">支持 .zip 和 .rar 格式，也可以直接拖放到窗口任意位置</p>
                       </div>
                     ) : filteredMods.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-gray-400">
                         <p className="text-lg font-medium">{search ? '没有找到匹配的 MOD' : '暂无 MOD'}</p>
-                        <p className="text-sm mt-1">拖拽 ZIP 文件到此处安装</p>
+                        <p className="text-sm mt-1">拖拽压缩包文件到此处安装</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
