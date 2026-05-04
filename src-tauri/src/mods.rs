@@ -754,8 +754,8 @@ pub async fn mods_install(
     let dialog = app.dialog();
     let files = dialog
         .file()
-        .set_title("Select MOD Archive")
-        .add_filter("Archives", &["zip", "rar"])
+        .set_title("Select MOD Archive, RAR, or Folder")
+        .add_filter("All Files", &["*"])
         .blocking_pick_files();
 
     let file_paths = match files {
