@@ -96,7 +96,11 @@ pnpm run dev             # Electron 开发模式
 ```
 src/              前端源码 (React)
 src-tauri/        后端源码 (Rust)
+dist/             Webpack 构建产物
+dist-tauri/       Tauri 前端构建产物
 docs/             截图素材
+main.js           Electron 主进程 (备选)
+preload.js        Electron 预加载 (备选)
 ```
 
 <br>
