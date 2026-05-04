@@ -1,4 +1,4 @@
-use crate::translations::{translations_load, translations_save};
+use crate::translations::translations_load;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -118,7 +118,7 @@ fn get_mod_latest_mtime(mod_path: &Path) -> Option<u64> {
                     walkdir(&path, max_mtime);
                 } else if let Ok(meta) = entry.metadata() {
                     if let Ok(mtime) = meta.modified() {
-                        if let Some(duration) = mtime.duration_since(std::time::UNIX_EPOCH) {
+                        if let Some(duration) = mtime.duration_since(std::time::UNIX_EPOCH).ok() {
                             let ms = duration.as_millis() as u64;
                             if ms > *max_mtime {
                                 *max_mtime = ms;
@@ -315,14 +315,14 @@ pub fn scan_mods_internal(game_path: &str) -> Vec<ModInfo> {
         a_name.to_lowercase().cmp(&b_name.to_lowercase())
     });
 
-    // Load display names and timestamps from translations.json
+    // Load display names from translations.json
     let translations = translations_load();
     let display_names = translations
         .get("_mod_display_names")
         .and_then(|v| v.as_object())
         .map(|o| o.clone())
         .unwrap_or_default();
-    let updated_at_map = translations
+    let _updated_at_map = translations
         .get("_mod_updated_at")
         .and_then(|v| v.as_object())
         .map(|o| o.clone())
