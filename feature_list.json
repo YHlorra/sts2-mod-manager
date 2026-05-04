@@ -1,0 +1,148 @@
+{
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "MOD 扫描与列表",
+      "description": "扫描游戏目录下的 MOD，显示名称、版本、依赖、启用状态",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "mods::scan_mods_internal, mods_scan command"
+    },
+    {
+      "id": "feat-002",
+      "name": "MOD 启用/禁用",
+      "description": "移动 MOD 文件夹到 mods 或 mods_disabled 目录",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "mods_toggle command, ToggleModInfo"
+    },
+    {
+      "id": "feat-003",
+      "name": "MOD 安装",
+      "description": "从 ZIP 或文件夹安装 MOD，支持智能提取",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "mods_install, mods_install_drop commands"
+    },
+    {
+      "id": "feat-004",
+      "name": "MOD 卸载",
+      "description": "删除 MOD 文件夹或文件",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "mods_uninstall command"
+    },
+    {
+      "id": "feat-005",
+      "name": "MOD 备份",
+      "description": "将 mods 目录打包为 ZIP 备份",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "mods_backup command"
+    },
+    {
+      "id": "feat-006",
+      "name": "MOD 还原",
+      "description": "从 ZIP 备份恢复 MOD",
+      "dependencies": ["feat-003"],
+      "status": "done",
+      "evidence": "mods_restore command"
+    },
+    {
+      "id": "feat-007",
+      "name": "存档管理",
+      "description": "扫描、导出、导入、删除游戏存档",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "saves module, saves_scan/export/import/delete_backup"
+    },
+    {
+      "id": "feat-008",
+      "name": "游戏启动",
+      "description": "启动 Steam 版或非 Steam 版游戏",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "game module, game_launch command"
+    },
+    {
+      "id": "feat-009",
+      "name": "配置档案",
+      "description": "保存和加载 MOD 启用方案配置",
+      "dependencies": ["feat-002"],
+      "status": "done",
+      "evidence": "profiles module, profiles_save/load"
+    },
+    {
+      "id": "feat-010",
+      "name": "MOD 翻译",
+      "description": "调用翻译 API 将英文描述翻译为中文",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "translate module, translate_text command"
+    },
+    {
+      "id": "feat-011",
+      "name": "翻译持久化",
+      "description": "将翻译结果保存到 translations.json",
+      "dependencies": ["feat-010"],
+      "status": "done",
+      "evidence": "translations module, translations_save/load"
+    },
+    {
+      "id": "feat-012",
+      "name": "游戏日志",
+      "description": "读取和显示最新游戏日志",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "logs module, logs_get_latest/read"
+    },
+    {
+      "id": "feat-013",
+      "name": "崩溃分析",
+      "description": "游戏退出后自动分析日志，定位问题 MOD",
+      "dependencies": ["feat-012"],
+      "status": "done",
+      "evidence": "game_analyze_crash command"
+    },
+    {
+      "id": "nexus-01",
+      "name": "Nexus Mods URL 存储",
+      "description": "为每个 MOD 记录 Nexus Mods URL",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "Phase 1 complete - URL stored in translations.json"
+    },
+    {
+      "id": "nexus-02",
+      "name": "浏览器打开 URL",
+      "description": "在默认浏览器中打开 MOD 的 Nexus 页面",
+      "dependencies": ["nexus-01"],
+      "status": "done",
+      "evidence": "Phase 1 complete - shell_open_url command"
+    },
+    {
+      "id": "nexus-03",
+      "name": "URL 持久化",
+      "description": "URL 跨会话保存，不受 MOD 重装影响",
+      "dependencies": ["nexus-01"],
+      "status": "done",
+      "evidence": "Phase 1 complete - stored in AppData"
+    },
+    {
+      "id": "nexus-04",
+      "name": "版本记录与更新提示",
+      "description": "记录最新看到的版本，版本不匹配时显示更新标记",
+      "dependencies": ["nexus-01"],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "nexus-05",
+      "name": "批量检查更新",
+      "description": "扫描所有有 URL 的 MOD，批量显示版本状态",
+      "dependencies": ["nexus-04"],
+      "status": "pending",
+      "evidence": ""
+    }
+  ]
+}

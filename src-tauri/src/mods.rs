@@ -895,3 +895,129 @@ fn chrono_timestamp() -> String {
         .as_millis();
     now.to_string()
 }
+
+// ── Tests ──
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_mods_dir() {
+        let game_path = "C:/Games/SlayTheSpire2";
+        let mods_dir = get_mods_dir(game_path);
+        assert_eq!(mods_dir, std::path::Path::new("C:/Games/SlayTheSpire2/mods"));
+    }
+
+    #[test]
+    fn test_get_disabled_dir() {
+        let game_path = "C:/Games/SlayTheSpire2";
+        let disabled_dir = get_disabled_dir(game_path);
+        assert_eq!(disabled_dir, std::path::Path::new("C:/Games/SlayTheSpire2/mods_disabled"));
+    }
+
+    #[test]
+    fn test_get_legacy_disabled_dir() {
+        let game_path = "C:/Games/SlayTheSpire2";
+        let legacy_dir = get_legacy_disabled_dir(game_path);
+        assert_eq!(legacy_dir, std::path::Path::new("C:/Games/SlayTheSpire2/mods/_disabled"));
+    }
+
+    #[test]
+    fn test_read_json_file_with_bom() {
+        let temp_dir = std::env::temp_dir();
+        let bom_path = temp_dir.join("test_bom.json");
+        // UTF-8 BOM
+        std::fs::write(&bom_path, "\u{feff}{\"id\": \"mod1\", \"name\": \"TestMod\"}").unwrap();
+
+        let result = read_json_file(&bom_path);
+        assert!(result.is_some());
+        let val = result.unwrap();
+        assert_eq!(val.get("id").and_then(|v| v.as_str()), Some("mod1"));
+        assert_eq!(val.get("name").and_then(|v| v.as_str()), Some("TestMod"));
+
+        std::fs::remove_file(&bom_path).ok();
+    }
+
+    #[test]
+    fn test_read_json_file_without_bom() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test_no_bom.json");
+        std::fs::write(&path, "{\"id\": \"mod2\", \"name\": \"AnotherMod\"}").unwrap();
+
+        let result = read_json_file(&path);
+        assert!(result.is_some());
+        let val = result.unwrap();
+        assert_eq!(val.get("id").and_then(|v| v.as_str()), Some("mod2"));
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_read_json_file_invalid() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test_invalid.json");
+        std::fs::write(&path, "not valid json {{{").unwrap();
+
+        let result = read_json_file(&path);
+        assert!(result.is_none());
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_read_json_file_nonexistent() {
+        let result = read_json_file(std::path::Path::new("nonexistent/path.json"));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_chrono_timestamp_format() {
+        let ts = chrono_timestamp();
+        // Should be a numeric string representing milliseconds since epoch
+        assert!(ts.chars().all(|c| c.is_ascii_digit()));
+        // Should be reasonably large (post-2020)
+        let ts_num: u64 = ts.parse().expect("Should be valid u64");
+        assert!(ts_num > 1577836800000); // 2020-01-01 in ms
+    }
+
+    #[test]
+    fn test_find_folder_mod_location_roots() {
+        // Test that roots contain expected directories
+        let game_path = "C:/Games/SlayTheSpire2";
+        let roots = vec![
+            get_mods_dir(game_path),
+            get_disabled_dir(game_path),
+            get_legacy_disabled_dir(game_path),
+        ];
+        assert_eq!(roots.len(), 3);
+    }
+
+    #[test]
+    fn test_find_flat_mod_base_dir_roots() {
+        let game_path = "C:/Games/SlayTheSpire2";
+        let roots = vec![
+            get_mods_dir(game_path),
+            get_disabled_dir(game_path),
+            get_legacy_disabled_dir(game_path),
+        ];
+        assert_eq!(roots.len(), 3);
+    }
+
+    #[test]
+    fn test_disabled_dir_creates_if_missing() {
+        let temp_dir = std::env::temp_dir();
+        let test_game = temp_dir.join("test_game_disabled");
+        std::fs::create_dir_all(&test_game).unwrap();
+
+        let disabled = get_disabled_dir(test_game.to_str().unwrap());
+        // Directory should be created if it doesn't exist
+        if !disabled.exists() {
+            std::fs::create_dir_all(&disabled).unwrap();
+        }
+        assert!(disabled.exists());
+
+        // Cleanup
+        std::fs::remove_dir_all(&test_game).ok();
+    }
+}

@@ -552,3 +552,170 @@ pub fn saves_delete_backup(backup_path: String) -> SimpleResult {
     }
     SimpleResult { success: true, error: None }
 }
+
+// ── Tests ──
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_char_name_ironclad() {
+        assert_eq!(char_name("CHARACTER.IRONCLAD"), "铁甲战士");
+    }
+
+    #[test]
+    fn test_char_name_silent() {
+        assert_eq!(char_name("CHARACTER.SILENT"), "沉默猎手");
+    }
+
+    #[test]
+    fn test_char_name_regent() {
+        assert_eq!(char_name("CHARACTER.REGENT"), "摄政王");
+    }
+
+    #[test]
+    fn test_char_name_necrobinder() {
+        assert_eq!(char_name("CHARACTER.NECROBINDER"), "缚灵师");
+    }
+
+    #[test]
+    fn test_char_name_defect() {
+        assert_eq!(char_name("CHARACTER.DEFECT"), "缺陷体");
+    }
+
+    #[test]
+    fn test_char_name_watcher() {
+        assert_eq!(char_name("CHARACTER.WATCHER"), "观察者");
+    }
+
+    #[test]
+    fn test_char_name_unknown() {
+        // Unknown IDs should return last segment
+        assert_eq!(char_name("CHARACTER.UNKNOWN"), "UNKNOWN");
+    }
+
+    #[test]
+    fn test_char_name_no_dot() {
+        // No dot means just return as-is
+        assert_eq!(char_name("SIMPLE"), "SIMPLE");
+    }
+
+    #[test]
+    fn test_get_appdata() {
+        let appdata = get_appdata();
+        // Should return Some on valid systems, None otherwise
+        // Just verify it doesn't panic
+        assert!(appdata.is_none() || appdata.unwrap().to_string_lossy().len() > 0);
+    }
+
+    #[test]
+    fn test_get_save_backup_dir() {
+        let dir = get_save_backup_dir();
+        // Should end with save_backups
+        assert!(dir.to_string_lossy().ends_with("save_backups"));
+    }
+
+    #[test]
+    fn test_timestamp_string_format() {
+        let ts = timestamp_string();
+        // Format: YYYY-MM-DDTHH-MM-SS
+        assert!(ts.contains("-"));
+        assert!(ts.contains("T"));
+    }
+
+    #[test]
+    fn test_parse_progress_nonexistent() {
+        let result = parse_progress(std::path::Path::new("nonexistent.json"));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_save_slot_struct_serialization() {
+        let slot = SaveSlot {
+            slot: "profile1".to_string(),
+            modded: false,
+            path: "/path/to/save".to_string(),
+            has_progress: true,
+            has_prefs: true,
+            empty: false,
+            last_modified: Some("2024-01-01".to_string()),
+            size: 1024,
+            summary: None,
+        };
+        let json = serde_json::to_string(&slot).unwrap();
+        assert!(json.contains("profile1"));
+        assert!(json.contains("modded"));
+    }
+
+    #[test]
+    fn test_backup_entry_serialization() {
+        let entry = BackupEntry {
+            name: "backup.zip".to_string(),
+            path: "/path/to/backup.zip".to_string(),
+            size: 2048,
+            time: "2024-01-01".to_string(),
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("backup.zip"));
+    }
+
+    #[test]
+    fn test_saves_result_empty() {
+        let result = SavesResult {
+            slots: vec![],
+            backups: vec![],
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("slots"));
+        assert!(json.contains("backups"));
+    }
+
+    #[test]
+    fn test_simple_result_success() {
+        let result = SimpleResult {
+            success: true,
+            error: None,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("true"));
+    }
+
+    #[test]
+    fn test_simple_result_failure() {
+        let result = SimpleResult {
+            success: false,
+            error: Some("Test error".to_string()),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("false"));
+        assert!(json.contains("Test error"));
+    }
+
+    #[test]
+    fn test_chrono_from_timestamp() {
+        let result = chrono_from_timestamp(0);
+        // Should not panic
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_walk_size_and_mtime_empty_dir() {
+        let temp_dir = std::env::temp_dir().join("test_walk_empty");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let (size, mtime) = walk_size_and_mtime(&temp_dir);
+        assert_eq!(size, 0);
+        std::fs::remove_dir(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_walk_size_and_mtime_with_file() {
+        let temp_dir = std::env::temp_dir().join("test_walk_file");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        std::fs::write(temp_dir.join("test.txt"), "hello").unwrap();
+        let (size, mtime) = walk_size_and_mtime(&temp_dir);
+        assert!(size > 0);
+        assert!(mtime > 0);
+        std::fs::remove_dir_all(&temp_dir).ok();
+    }
+}

@@ -169,3 +169,62 @@ pub async fn app_select_game_path(
         Ok(None)
     }
 }
+
+// ── Tests ──
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_dir_path() {
+        let dir = config_dir();
+        // Should end with STS2ModManager
+        assert!(dir.to_string_lossy().ends_with("STS2ModManager"));
+    }
+
+    #[test]
+    fn test_config_path_path() {
+        let path = config_path();
+        // Should be config_dir + config.json
+        assert!(path.to_string_lossy().ends_with("config.json"));
+    }
+
+    #[test]
+    fn test_load_config_default() {
+        // Config should default to empty when no file exists
+        let cfg = load_config();
+        assert_eq!(cfg.game_path, None);
+    }
+
+    #[test]
+    fn test_config_serialization() {
+        let cfg = Config {
+            game_path: Some("C:/Games/SlayTheSpire2".to_string()),
+        };
+        let json = serde_json::to_string(&cfg).unwrap();
+        assert!(json.contains("gamePath"));
+        assert!(json.contains("SlayTheSpire2"));
+    }
+
+    #[test]
+    fn test_init_result_serialization() {
+        let result = InitResult {
+            game_path: Some("C:/Games/SlayTheSpire2".to_string()),
+            mods_dir: Some("C:/Games/SlayTheSpire2/mods".to_string()),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("gamePath"));
+        assert!(json.contains("modsDir"));
+    }
+
+    #[test]
+    fn test_detect_game_path_nonexistent() {
+        // Should return None for truly nonexistent paths
+        let result = detect_game_path();
+        // May return Some if game actually exists, or None if not
+        if let Some(path) = result {
+            assert!(Path::new(&path).exists());
+        }
+    }
+}
