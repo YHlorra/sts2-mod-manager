@@ -241,10 +241,10 @@ export default function App() {
     e.preventDefault();
     setDragOver(false);
     const paths = Array.from(e.dataTransfer.files)
-      .filter(f => f.name.endsWith('.zip') || !f.name.includes('.') || f.type === '')
+      .filter(f => f.name.endsWith('.zip') || f.name.endsWith('.rar') || !f.name.includes('.') || f.type === '')
       .map(f => f.path);
     if (paths.length === 0) {
-      showToast('请拖入 .zip 压缩包或 MOD 文件夹', 'error');
+      showToast('请拖入 .zip 或 .rar 压缩包，或 MOD 文件夹', 'error');
       return;
     }
     const result = await window.api.installDrop(paths);

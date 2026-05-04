@@ -447,18 +447,23 @@ pub fn mods_uninstall(
     }
 }
 
-fn smart_extract_zip(zip_path: &str, mods_dir: &Path) -> Result<(), String> {
-    let ext = Path::new(zip_path)
+fn smart_extract_archive(path: &str, mods_dir: &Path) -> Result<(), String> {
+    let ext = Path::new(path)
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
-    if ext != "zip" {
-        return Err(format!(
-            "不支持的格式: .{}\n\n目前仅支持 .zip 格式的压缩包。\n如果是 .rar / .7z 请先解压后拖入文件夹，或转换为 .zip 格式。",
-            ext
-        ));
-    }
 
+    match ext.as_str() {
+        "zip" => smart_extract_zip_impl(path, mods_dir),
+        "rar" => smart_extract_rar(path, mods_dir),
+        _ => Err(format!(
+            "不支持的格式: .{}\n\n目前支持 .zip 和 .rar 格式的压缩包。",
+            ext
+        )),
+    }
+}
+
+fn smart_extract_zip_impl(zip_path: &str, mods_dir: &Path) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| format!(
         "无法读取压缩包: {}\n\n该文件可能已损坏或不是有效的 ZIP 格式。\n\nMOD 压缩包应为 .zip 格式，内含:\n  • ModName.json (MOD 描述文件)\n  • ModName.dll (代码类 MOD)\n  • ModName.pck (资源类 MOD)",
         e
@@ -586,6 +591,164 @@ fn smart_extract_zip(zip_path: &str, mods_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn smart_extract_rar(rar_path: &str, mods_dir: &Path) -> Result<(), String> {
+    use unrar2::Archive;
+
+    let archive = Archive::new(rar_path).open_for_processing().map_err(|e| format!(
+        "无法读取 RAR 压缩包: {}\n\n该文件可能已损坏。",
+        Path::new(rar_path).file_name().unwrap_or_default().to_string_lossy()
+    ))?;
+
+    // Check for password protection
+    if archive.is_encrypted() {
+        return Err(format!(
+            "无法读取 RAR 压缩包: {}\n\n该文件已加密，请先使用解压工具解压后再拖入。",
+            Path::new(rar_path).file_name().unwrap_or_default().to_string_lossy()
+        ));
+    }
+
+    // Smart search: find MOD manifest JSON files inside the RAR
+    let mut mod_roots: Vec<(String, String)> = Vec::new();
+    let mut flat_mod = false;
+
+    {
+        let listing = archive.open_for_listing().map_err(|e| format!(
+            "无法读取 RAR 压缩包: {}\n\n该文件可能已损坏。",
+            e
+        ))?;
+
+        for entry in listing.entries() {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            let name = entry.entry_name();
+            if !name.ends_with(".json") { continue; }
+
+            // Read JSON content to check for manifest
+            let reader = match archive.open_for_reading(&entry) {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            let mut buf = Vec::new();
+            let mut r = reader;
+            std::io::Read::read_to_end(&mut r, &mut buf).map_err(|e| e.to_string())?;
+            if let Ok(text) = String::from_utf8(buf.clone()) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if val.get("id").is_some() && val.get("name").is_some() {
+                        let parts: Vec<&str> = name.split('/').collect();
+                        if parts.len() >= 2 {
+                            let mod_dir = parts[..parts.len()-1].join("/");
+                            let folder_name = parts[parts.len()-2].to_string();
+                            mod_roots.push((mod_dir, folder_name));
+                        } else {
+                            flat_mod = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Re-open for extraction
+    let extract_archive = Archive::new(rar_path).open_for_processing().map_err(|e| format!(
+        "无法读取 RAR 压缩包: {}\n\n该文件可能已损坏。",
+        e
+    ))?;
+
+    if mod_roots.is_empty() && !flat_mod {
+        // Fallback: single top-level folder or archive stem as folder name
+        let listing = extract_archive.open_for_listing().map_err(|e| e.to_string())?;
+        let mut top_dirs = std::collections::HashSet::new();
+        let mut has_root_file = false;
+
+        for entry in listing.entries() {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            let name = entry.entry_name();
+            let parts: Vec<_> = name.split('/').filter(|s| !s.is_empty()).collect();
+            if parts.len() == 1 && !entry.is_dir() {
+                has_root_file = true;
+                break;
+            }
+            if let Some(first) = parts.first() {
+                top_dirs.insert(first.to_string());
+            }
+        }
+
+        let dest = if !has_root_file && top_dirs.len() == 1 {
+            mods_dir.to_path_buf()
+        } else {
+            let base_name = Path::new(rar_path)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "unknown_mod".to_string());
+            let sub_dir = mods_dir.join(&base_name);
+            let _ = fs::create_dir_all(&sub_dir);
+            sub_dir
+        };
+
+        for entry in extract_archive.entries().map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let entry_name = entry.entry_name();
+            let out_path = dest.join(entry_name);
+            if entry.is_dir() {
+                let _ = fs::create_dir_all(&out_path);
+            } else {
+                if let Some(parent) = out_path.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+                let mut outfile = fs::File::create(&out_path).map_err(|e| e.to_string())?;
+                let mut reader = extract_archive.open_for_reading(&entry).map_err(|e| e.to_string())?;
+                std::io::copy(&mut reader, &mut outfile).map_err(|e| e.to_string())?;
+            }
+        }
+        return Ok(());
+    }
+
+    // Extract by mod roots
+    for (mod_dir, folder_name) in &mod_roots {
+        let dest_dir = mods_dir.join(folder_name);
+        let _ = fs::create_dir_all(&dest_dir);
+        let prefix = format!("{}/", mod_dir);
+
+        for entry in extract_archive.entries().map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let entry_name = entry.entry_name();
+            if !entry_name.starts_with(&prefix) { continue; }
+            let rel = &entry_name[prefix.len..];
+            if rel.is_empty() { continue; }
+            let out_path = dest_dir.join(rel);
+            if entry.is_dir() {
+                let _ = fs::create_dir_all(&out_path);
+            } else {
+                if let Some(parent) = out_path.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+                let mut outfile = fs::File::create(&out_path).map_err(|e| e.to_string())?;
+                let mut reader = extract_archive.open_for_reading(&entry).map_err(|e| e.to_string())?;
+                std::io::copy(&mut reader, &mut outfile).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+
+    if flat_mod && mod_roots.is_empty() {
+        for entry in extract_archive.entries().map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let entry_name = entry.entry_name();
+            if entry_name.contains('/') || entry.is_dir() { continue; }
+            let out_path = mods_dir.join(entry_name);
+            let mut outfile = fs::File::create(&out_path).map_err(|e| e.to_string())?;
+            let mut reader = extract_archive.open_for_reading(&entry).map_err(|e| e.to_string())?;
+            std::io::copy(&mut reader, &mut outfile).map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(())
+}
+
 fn install_folder(folder_path: &str, mods_dir: &Path) -> Result<(), String> {
     let src = Path::new(folder_path);
     if !src.is_dir() {
@@ -636,7 +799,7 @@ pub async fn mods_install(
     let files = dialog
         .file()
         .set_title("Select MOD Archive")
-        .add_filter("Archives", &["zip"])
+        .add_filter("Archives", &["zip", "rar"])
         .blocking_pick_files();
 
     let file_paths = match files {
@@ -658,7 +821,7 @@ pub async fn mods_install(
         let result = if p.is_dir() {
             install_folder(&path_str, &mods_dir)
         } else {
-            smart_extract_zip(&path_str, &mods_dir)
+            smart_extract_archive(&path_str, &mods_dir)
         };
         if let Err(e) = result {
             return Ok(ModResult {
@@ -709,7 +872,7 @@ pub fn mods_install_drop(
         let result = if p.is_dir() {
             install_folder(fp, &mods_dir)
         } else {
-            smart_extract_zip(fp, &mods_dir)
+            smart_extract_archive(fp, &mods_dir)
         };
         if let Err(e) = result {
             return ModResult {
