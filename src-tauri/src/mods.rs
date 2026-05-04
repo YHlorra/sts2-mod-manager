@@ -594,67 +594,6 @@ fn smart_extract_zip_impl(zip_path: &str, mods_dir: &Path) -> Result<(), String>
 fn smart_extract_rar(rar_path: &str, mods_dir: &Path) -> Result<(), String> {
     use unrar::Archive;
 
-    // First pass: collect all entries to find mod roots
-    let listing = Archive::new(rar_path).open_for_listing().map_err(|e| format!(
-        "无法读取 RAR 压缩包: {}\n\n该文件可能已损坏。",
-        e
-    ))?;
-
-    let mut mod_roots: Vec<(String, String)> = Vec::new();
-    let mut flat_mod = false;
-
-    for result in listing {
-        let entry = match result {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-        let name = entry.filename.to_string_lossy().into_owned();
-        if !name.ends_with(".json") { continue; }
-
-        // Try to read JSON content
-        let archive_for_read = Archive::new(rar_path).open_for_processing()
-            .map_err(|e| format!("无法读取 RAR 压缩包: {}\n\n该文件可能已损坏。", e))?;
-        let mut archive = archive_for_read;
-        loop {
-            match archive.read_header() {
-                Ok(Some(mut a)) => {
-                    let entry_name = a.entry().filename.to_string_lossy().into_owned();
-                    if entry_name == name {
-                        match a.read() {
-                            Ok((buf, next_archive)) => {
-                                if let Ok(text) = String::from_utf8(buf) {
-                                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                                        if val.get("id").is_some() && val.get("name").is_some() {
-                                            let parts: Vec<&str> = name.split('/').collect();
-                                            if parts.len() >= 2 {
-                                                let mod_dir = parts[..parts.len()-1].join("/");
-                                                let folder_name = parts[parts.len()-2].to_string();
-                                                mod_roots.push((mod_dir, folder_name));
-                                            } else {
-                                                flat_mod = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                break;
-                            }
-                            Err(_) => break,
-                        }
-                    } else {
-                        match a.skip() {
-                            Ok(next) => { archive = next; }
-                            Err(_) => break,
-                        }
-                    }
-                }
-                Ok(None) => break,
-                Err(_) => break,
-            }
-        }
-    }
-
-    drop(mod_roots);
-
     let archive = Archive::new(rar_path).open_for_processing().map_err(|e| format!(
         "无法读取 RAR 压缩包: {}\n\n该文件可能已损坏。",
         e
@@ -663,7 +602,7 @@ fn smart_extract_rar(rar_path: &str, mods_dir: &Path) -> Result<(), String> {
     let mut archive = archive;
     loop {
         match archive.read_header() {
-            Ok(Some(mut a)) => {
+            Ok(Some(a)) => {
                 let entry_name = a.entry().filename.to_string_lossy().into_owned();
                 let is_dir = entry_name.ends_with('/');
 
@@ -681,7 +620,6 @@ fn smart_extract_rar(rar_path: &str, mods_dir: &Path) -> Result<(), String> {
                     }
                     match a.extract() {
                         Ok(next) => {
-                            // Move extracted file to correct location
                             let extracted_name = Path::new(&entry_name).file_name()
                                 .map(|n| n.to_string_lossy().to_string())
                                 .unwrap_or_default();
