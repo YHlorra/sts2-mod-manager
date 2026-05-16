@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const AdmZip = require('adm-zip');
 
 // Use dedicated userData dir to avoid GPU cache conflicts
@@ -367,32 +368,64 @@ ipcMain.handle('mods:uninstall', (_, modInfo) => {
   }
 });
 
-function smartExtractZip(zipPath, modsDir) {
+async function smartExtractZip(zipPath, modsDir) {
   const ext = path.extname(zipPath).toLowerCase();
-  if (ext !== '.zip') {
+  if (!['.zip', '.7z'].includes(ext)) {
     throw new Error(
       `不支持的格式: ${ext}\n\n` +
-      `目前仅支持 .zip 格式的压缩包。\n` +
-      `如果是 .rar / .7z 请先解压后拖入文件夹，或转换为 .zip 格式。`
+      `目前仅支持 .zip 和 .7z 格式的压缩包。\n` +
+      `如果是 .rar 请先解压后拖入文件夹，或转换为 .zip 格式。`
     );
   }
 
   let zip;
+  let entries = [];
   try {
-    zip = new AdmZip(zipPath);
+    if (ext === '.zip') {
+      zip = new AdmZip(zipPath);
+      entries = zip.getEntries();
+    } else if (ext === '.7z') {
+      // 7z: 解压到临时目录后通过 installFolder 处理
+      // 注意：7z分支跳过manifest检测，所有7z包都当文件夹mod处理
+      const { extract } = require('node-7z');
+      const tmpDir = path.join(os.tmpdir(), 'sts2mod-' + Date.now());
+      fs.mkdirSync(tmpDir, { recursive: true });
+      try {
+        // extract.full 返回 EventEmitter，用 Promise 包装等待完成
+        await new Promise((resolve, reject) => {
+          const stream = extract.full(zipPath, tmpDir, { $bin: '7z' });
+          stream.on('end', resolve);
+          stream.on('error', reject);
+        });
+        // 解压完成后，用 installFolder 安装到 modsDir
+        installFolder(tmpDir, modsDir);
+      } finally {
+        // 无论成功还是失败，都清理临时目录
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+      return; // 7z解压安装完成，直接返回
+    }
   } catch (e) {
+    if (e.message && e.message.includes('7-Zip executable not found')) {
+      throw new Error(
+        `未找到 7-Zip 程序。\n\n` +
+        `node-7z 需要系统已安装 7-Zip。\n` +
+        `请从 https://www.7-zip.org 下载并安装 7-Zip，然后重新启动应用。`
+      );
+    }
     throw new Error(
       `无法读取压缩包: ${path.basename(zipPath)}\n\n` +
-      `该文件可能已损坏或不是有效的 ZIP 格式。\n\n` +
-      `MOD 压缩包应为 .zip 格式，内含以下文件之一:\n` +
+      `该文件可能已损坏或不是有效的压缩格式。\n\n` +
+      `MOD 压缩包应为 .zip 或 .7z 格式，内含以下文件之一:\n` +
       `  • ModName.json (MOD 描述文件)\n` +
       `  • ModName.dll (代码类 MOD)\n` +
       `  • ModName.pck (资源类 MOD)`
     );
   }
 
-  const entries = zip.getEntries();
   if (entries.length === 0) {
+    throw new Error(`压缩包为空: ${path.basename(zipPath)}`);
+  }
     throw new Error(`压缩包为空: ${path.basename(zipPath)}`);
   }
 
@@ -427,7 +460,14 @@ function smartExtractZip(zipPath, modsDir) {
       if (mr.modDir) {
         // Folder mod: extract entries under modDir/ into modsDir/folderName/
         const destDir = path.join(modsDir, mr.folderName);
-        if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+        // 安全防护：确保目标在 modsDir 内
+        const resolvedDest = path.resolve(destDir);
+        const resolvedModsDir = path.resolve(modsDir);
+        if (!resolvedDest.startsWith(resolvedModsDir + path.sep)) {
+          throw new Error(`安全限制：拒绝删除 mods 目录外的路径 ${destDir}`);
+        }
+        if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true });
+        fs.mkdirSync(destDir, { recursive: true });
         const modPrefix = mr.modDir + '/';
         for (const entry of entries) {
           const ep = entry.entryName.replace(/\\/g, '/');
@@ -470,9 +510,16 @@ function smartExtractZip(zipPath, modsDir) {
   if (!hasRootFile && topDirs.size === 1) {
     zip.extractAllTo(modsDir, true);
   } else {
+    // 安全防护：确保目标在 modsDir 内
     const baseName = path.basename(zipPath, path.extname(zipPath));
     const subDir = path.join(modsDir, baseName);
-    if (!fs.existsSync(subDir)) fs.mkdirSync(subDir, { recursive: true });
+    const resolvedSub = path.resolve(subDir);
+    const resolvedModsDir = path.resolve(modsDir);
+    if (!resolvedSub.startsWith(resolvedModsDir + path.sep)) {
+      throw new Error(`安全限制：拒绝删除 mods 目录外的路径 ${subDir}`);
+    }
+    if (fs.existsSync(subDir)) fs.rmSync(subDir, { recursive: true, force: true });
+    fs.mkdirSync(subDir, { recursive: true });
     zip.extractAllTo(subDir, true);
   }
 
@@ -498,6 +545,13 @@ function smartExtractZip(zipPath, modsDir) {
 function installFolder(folderPath, modsDir) {
   const folderName = path.basename(folderPath);
   const dest = path.join(modsDir, folderName);
+  // 安全防护：确保目标在 modsDir 内
+  const resolvedDest = path.resolve(dest);
+  const resolvedModsDir = path.resolve(modsDir);
+  if (!resolvedDest.startsWith(resolvedModsDir + path.sep)) {
+    throw new Error(`安全限制：拒绝删除 mods 目录外的路径 ${dest}`);
+  }
+  if (fs.existsSync(dest)) fs.rmSync(dest, { recursive: true, force: true });
   fs.cpSync(folderPath, dest, { recursive: true });
 }
 
@@ -507,7 +561,7 @@ ipcMain.handle('mods:install', async () => {
 
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '选择 MOD 压缩包或文件夹',
-    filters: [{ name: 'Archives', extensions: ['zip'] }],
+    filters: [{ name: 'Archives', extensions: ['zip', '7z'] }],
     properties: ['openFile', 'openDirectory', 'multiSelections'],
   });
 
@@ -519,7 +573,7 @@ ipcMain.handle('mods:install', async () => {
       if (fs.statSync(filePath).isDirectory()) {
         installFolder(filePath, modsDir);
       } else {
-        smartExtractZip(filePath, modsDir);
+        await smartExtractZip(filePath, modsDir);
       }
       installed.push(path.basename(filePath));
     } catch (e) {
@@ -539,7 +593,7 @@ ipcMain.handle('mods:installDrop', async (_, filePaths) => {
       if (fs.statSync(filePath).isDirectory()) {
         installFolder(filePath, modsDir);
       } else {
-        smartExtractZip(filePath, modsDir);
+        await smartExtractZip(filePath, modsDir);
       }
       installed.push(path.basename(filePath));
     } catch (e) {
@@ -974,7 +1028,7 @@ ipcMain.handle('mods:backup', async () => {
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Save MOD Backup',
     defaultPath: `sts2_mods_backup_${Date.now()}.zip`,
-    filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+    filters: [{ name: 'Archives', extensions: ['zip', '7z'] }],
   });
 
   if (result.canceled) return { success: false };
@@ -1132,7 +1186,7 @@ ipcMain.handle('saves:export', async (_, { slot, modded }) => {
   const result = await dialog.showSaveDialog(mainWindow, {
     title: '导出存档',
     defaultPath: defaultName,
-    filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+    filters: [{ name: 'Archives', extensions: ['zip', '7z'] }],
   });
   if (result.canceled) return { success: false };
 
@@ -1164,7 +1218,7 @@ ipcMain.handle('saves:import', async (_, { slot, modded }) => {
 
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '导入存档到 ' + slot,
-    filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+    filters: [{ name: 'Archives', extensions: ['zip', '7z'] }],
     properties: ['openFile'],
   });
   if (result.canceled) return { success: false };
@@ -1232,7 +1286,7 @@ ipcMain.handle('mods:restore', async () => {
 
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Select MOD Backup',
-    filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+    filters: [{ name: 'Archives', extensions: ['zip', '7z'] }],
     properties: ['openFile'],
   });
 
