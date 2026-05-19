@@ -18,3 +18,8 @@ builds/
 
 # Temp screenshots (hash-named)
 /[0-9a-f][0-9a-f][0-9a-f]*.png
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key

@@ -518,8 +518,9 @@ fn smart_extract_archive(path: &str, mods_dir: &Path) -> Result<(), String> {
     match ext.as_str() {
         "zip" => smart_extract_zip(path, mods_dir),
         "rar" => smart_extract_rar(path, mods_dir),
+        "7z" => smart_extract_7z(path, mods_dir),
         _ => Err(format!(
-            "不支持的格式: .{}\n\n目前支持 .zip 和 .rar 格式的压缩包。",
+            "不支持的格式: .{}\n\n目前支持 .zip、.rar 和 .7z 格式的压缩包。",
             ext
         )),
     }
@@ -711,6 +712,46 @@ fn smart_extract_rar(rar_path: &str, mods_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn smart_extract_7z(sz_path: &str, mods_dir: &Path) -> Result<(), String> {
+    use sevenz_rust::*;
+
+    let ext = Path::new(sz_path)
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if ext != "7z" {
+        return Err(format!(
+            "不支持的格式: .{}\n\n该文件不是有效的 7z 格式。",
+            ext
+        ));
+    }
+
+    // Extract to a temp directory first, then move individual files to mods_dir
+    let temp_dir = mods_dir.join(".sevenz_temp");
+    let _ = fs::remove_dir_all(&temp_dir);
+    fs::create_dir_all(&temp_dir).map_err(|e| format!(
+        "无法创建临时目录: {}",
+        e
+    ))?;
+
+    decompress_file(sz_path, &temp_dir).map_err(|e| format!(
+        "无法解压 7z 压缩包: {}\n\n该文件可能已损坏或被密码保护。",
+        e
+    ))?;
+
+    // Move extracted contents to mods_dir
+    if let Ok(entries) = fs::read_dir(&temp_dir) {
+        for entry in entries.flatten() {
+            let src = entry.path();
+            let dst = mods_dir.join(entry.file_name());
+            let _ = fs::remove_dir_all(&dst);
+            let _ = fs::rename(&src, &dst);
+        }
+    }
+    let _ = fs::remove_dir_all(&temp_dir);
+    Ok(())
+}
+
 fn install_folder(folder_path: &str, mods_dir: &Path) -> Result<(), String> {
     let src = Path::new(folder_path);
     if !src.is_dir() {
@@ -761,7 +802,7 @@ pub async fn mods_install(
     let files = dialog
         .file()
         .set_title("Select MOD Archive")
-        .add_filter("Archives", &["zip", "rar"])
+        .add_filter("Archives", &["zip", "rar", "7z"])
         .blocking_pick_files();
 
     let file_paths = match files {
