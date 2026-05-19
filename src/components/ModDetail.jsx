@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { X, ToggleLeft, ToggleRight, Trash2, AlertTriangle, FileText, Box, Code, Languages, ExternalLink, Shield, Gamepad2, Palette } from 'lucide-react';
+import { X, ToggleLeft, ToggleRight, Trash2, AlertTriangle, FileText, Box, Code, Languages, ExternalLink, Shield, Gamepad2, Palette, Pencil, Plus } from 'lucide-react';
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function formatDateTime(ms) {
+  if (!ms) return null;
+  const d = new Date(ms);
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  });
 }
 
 function isChinese(text) {
@@ -31,6 +40,15 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
   const [translating, setTranslating] = useState(false);
   const [translateError, setTranslateError] = useState(null);
 
+  const [nexusUrl, setNexusUrl] = useState(null);
+  const [urlEditMode, setUrlEditMode] = useState(false);
+  const [urlInputValue, setUrlInputValue] = useState('');
+  const [urlWarning, setUrlWarning] = useState(null);
+
+  const [displayNameValue, setDisplayNameValue] = useState(null);
+  const [displayNameEditMode, setDisplayNameEditMode] = useState(false);
+  const [displayNameInput, setDisplayNameInput] = useState('');
+
   // Load saved translations when mod changes
   useEffect(() => {
     setTranslateError(null);
@@ -44,15 +62,42 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
           setTranslatedName(null);
           setTranslatedDesc(null);
         }
+        // Load display name from _mod_display_names
+        const dn = saved._mod_display_names?.[mod.instanceKey] || saved._mod_display_names?.[mod.id] || null;
+        setDisplayNameValue(dn);
+        setDisplayNameInput(dn || '');
       }).catch(() => {
         setTranslatedName(null);
         setTranslatedDesc(null);
+        setDisplayNameValue(null);
+        setDisplayNameInput('');
       });
     } else {
       setTranslatedName(null);
       setTranslatedDesc(null);
+      setDisplayNameValue(null);
+      setDisplayNameInput('');
     }
   }, [mod.id, mod.instanceKey]);
+
+  // Load saved URL
+  useEffect(() => {
+    setUrlEditMode(false);
+    setUrlWarning(null);
+    if (window.api.loadTranslations) {
+      window.api.loadTranslations().then(saved => {
+        const url = saved._nexus_urls?.[mod.id]?.url || null;
+        setNexusUrl(url);
+        setUrlInputValue(url || '');
+      }).catch(() => {
+        setNexusUrl(null);
+        setUrlInputValue('');
+      });
+    } else {
+      setNexusUrl(null);
+      setUrlInputValue('');
+    }
+  }, [mod.id]);
 
   const handleTranslate = async () => {
     setTranslating(true);
@@ -81,6 +126,50 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
     setTranslating(false);
   };
 
+  const handleSaveDisplayName = async () => {
+    if (!window.api.saveTranslations) return;
+    const saved = await window.api.loadTranslations();
+    if (!saved._mod_display_names) saved._mod_display_names = {};
+    if (displayNameInput.trim()) {
+      saved._mod_display_names[mod.instanceKey] = displayNameInput.trim();
+      setDisplayNameValue(displayNameInput.trim());
+    } else {
+      delete saved._mod_display_names[mod.instanceKey];
+      setDisplayNameValue(null);
+    }
+    await window.api.saveTranslations(saved);
+    setDisplayNameEditMode(false);
+    if (onTranslationSaved) onTranslationSaved();
+  };
+
+  const handleSaveUrl = async () => {
+    if (!window.api.saveTranslations) return;
+    const saved = await window.api.loadTranslations();
+    if (!saved._nexus_urls) saved._nexus_urls = {};
+    if (urlInputValue.trim()) {
+      // Basic URL validation
+      let url = urlInputValue.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      try {
+        new URL(url);
+        saved._nexus_urls[mod.id] = { url };
+        setNexusUrl(url);
+        setUrlWarning(null);
+      } catch {
+        setUrlWarning('无效的链接格式');
+        return;
+      }
+    } else {
+      delete saved._nexus_urls[mod.id];
+      setNexusUrl(null);
+    }
+    await window.api.saveTranslations(saved);
+    setUrlEditMode(false);
+    if (onTranslationSaved) onTranslationSaved();
+  };
+
   const hasEnglishContent = !isChinese(mod.description) || !isChinese(mod.name);
 
   return (
@@ -88,8 +177,12 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
         <div className="min-w-0 flex-1 mr-2">
-          <h2 className="font-bold text-base truncate">{translatedName || mod.name}</h2>
-          {translatedName && <p className="text-[11px] text-gray-400 truncate">{mod.name}</p>}
+          <h2 className="font-bold text-base truncate">{displayNameValue || translatedName || mod.name}</h2>
+          {displayNameValue && <p className="text-[11px] text-gray-400 truncate">{mod.name}</p>}
+          {translatedName && !displayNameValue && <p className="text-[11px] text-gray-400 truncate">{mod.name}</p>}
+          {mod.localUpdatedAt && (
+            <p className="text-[11px] text-gray-400">更新于 {formatDateTime(mod.localUpdatedAt)}</p>
+          )}
         </div>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
           <X size={18} />
@@ -134,6 +227,75 @@ export default function ModDetail({ mod, allMods, onClose, onToggle, onUninstall
               <span className="text-xs text-gray-700 font-medium">{value}</span>
             </div>
           ))}
+        </div>
+
+        {/* Custom display name */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-400">显示名称</p>
+            <button onClick={() => {
+              if (displayNameEditMode) {
+                handleSaveDisplayName();
+              } else {
+                setDisplayNameEditMode(true);
+              }
+            }} className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-700 transition-colors">
+              <Pencil size={11} />
+              {displayNameEditMode ? '保存' : '编辑'}
+            </button>
+          </div>
+          {displayNameEditMode ? (
+            <input
+              type="text"
+              value={displayNameInput}
+              onChange={e => setDisplayNameInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSaveDisplayName()}
+              placeholder="设置此 MOD 的显示名称"
+              className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+          ) : (
+            <p className="text-sm text-gray-700">{displayNameValue || mod.name}</p>
+          )}
+        </div>
+
+        {/* Nexus URL */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-400">下载链接</p>
+            <button onClick={() => {
+              if (urlEditMode) {
+                handleSaveUrl();
+              } else {
+                setUrlEditMode(true);
+              }
+            }} className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-700 transition-colors">
+              <Pencil size={11} />
+              {urlEditMode ? '保存' : '编辑'}
+            </button>
+          </div>
+          {urlEditMode ? (
+            <div>
+              <input
+                type="text"
+                value={urlInputValue}
+                onChange={e => { setUrlInputValue(e.target.value); setUrlWarning(null); }}
+                onKeyDown={e => e.key === 'Enter' && handleSaveUrl()}
+                placeholder="粘贴 MOD 下载链接"
+                className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+              {urlWarning && <p className="text-xs text-red-400 mt-1">{urlWarning}</p>}
+            </div>
+          ) : (
+            nexusUrl ? (
+              <a href={nexusUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 text-sm text-blue-500 hover:text-blue-700 truncate">
+                <ExternalLink size={12} />
+                <span className="truncate">{nexusUrl}</span>
+              </a>
+            ) : (
+              <p className="text-xs text-gray-400">暂无链接</p>
+            )
+          )}
         </div>
 
         {/* Description */}

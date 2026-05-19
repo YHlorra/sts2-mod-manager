@@ -241,10 +241,10 @@ export default function App() {
     e.preventDefault();
     setDragOver(false);
     const paths = Array.from(e.dataTransfer.files)
-      .filter(f => f.name.endsWith('.zip') || !f.name.includes('.') || f.type === '')
+      .filter(f => f.name.endsWith('.zip') || f.name.endsWith('.rar') || !f.name.includes('.') || f.type === '')
       .map(f => f.path);
     if (paths.length === 0) {
-      showToast('请拖入 .zip 压缩包或 MOD 文件夹', 'error');
+      showToast('请拖入 .zip 或 .rar 压缩包，或 MOD 文件夹', 'error');
       return;
     }
     const result = await window.api.installDrop(paths);
@@ -529,7 +529,7 @@ export default function App() {
                               <Download size={22} />
                             </div>
                             <p className="font-semibold text-gray-500 mb-1">2. 安装第一个 MOD</p>
-                            <p className="text-xs text-gray-400">拖入 ZIP 文件或点击安装按钮</p>
+                            <p className="text-xs text-gray-400">拖入 ZIP/RAR 文件或点击安装按钮</p>
                           </div>
                           <div className="flex-1 bg-white rounded-xl border border-gray-100 p-6 text-center opacity-50">
                             <div className="w-12 h-12 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
@@ -559,7 +559,7 @@ export default function App() {
                               <Download size={22} />
                             </div>
                             <p className="font-semibold text-gray-800 mb-1">2. 安装第一个 MOD</p>
-                            <p className="text-xs text-gray-400">拖入 ZIP 文件或点击此处选择</p>
+                            <p className="text-xs text-gray-400">拖入 ZIP/RAR 文件或点击此处选择</p>
                           </div>
                           <div className="flex-1 bg-white rounded-xl border border-gray-100 p-6 text-center opacity-50">
                             <div className="w-12 h-12 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
@@ -569,12 +569,12 @@ export default function App() {
                             <p className="text-xs text-gray-400">启动游戏确认 MOD 正常加载</p>
                           </div>
                         </div>
-                        <p className="text-xs text-gray-300 mt-6">支持 .zip 格式，也可以直接拖放到窗口任意位置</p>
+                        <p className="text-xs text-gray-300 mt-6">支持 .zip 和 .rar 格式，也可以直接拖放到窗口任意位置</p>
                       </div>
                     ) : filteredMods.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-gray-400">
                         <p className="text-lg font-medium">{search ? '没有找到匹配的 MOD' : '暂无 MOD'}</p>
-                        <p className="text-sm mt-1">拖拽 ZIP 文件到此处安装</p>
+                        <p className="text-sm mt-1">拖拽 ZIP/RAR 文件到此处安装</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -619,7 +619,7 @@ export default function App() {
                     ) : filteredMods.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-gray-400">
                         <p className="text-sm font-medium">{search ? '没有找到匹配的 MOD' : '暂无 MOD'}</p>
-                        <p className="text-xs mt-1">拖拽 ZIP 文件到此处安装</p>
+                        <p className="text-xs mt-1">拖拽 ZIP/RAR 文件到此处安装</p>
                       </div>
                     ) : (
                       filteredMods.map(mod => (
@@ -677,7 +677,7 @@ export default function App() {
         <div className="fixed inset-0 bg-blue-50/80 flex items-center justify-center z-50 pointer-events-none">
           <div className="bg-white rounded-2xl p-8 shadow-lg text-center">
             <Download size={40} className="mx-auto mb-3 text-gray-900" />
-            <p className="text-lg font-semibold">拖放 ZIP 文件安装 MOD</p>
+                      <p className="text-lg font-semibold">拖放 ZIP/RAR 文件安装 MOD</p>
           </div>
         </div>
       )}

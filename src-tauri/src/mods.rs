@@ -1,3 +1,4 @@
+use crate::translations::translations_load;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -29,6 +30,10 @@ pub struct ModInfo {
     pub path: String,
     pub files: Vec<String>,
     pub size: u64,
+    #[serde(rename = "displayName")]
+    pub display_name: Option<String>,
+    #[serde(rename = "localUpdatedAt")]
+    pub local_updated_at: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -97,6 +102,38 @@ fn read_json_file(path: &Path) -> Option<serde_json::Value> {
     serde_json::from_str(&content).ok()
 }
 
+/// Recursively find the newest file's mtime (Unix ms) inside a mod folder.
+/// Returns None if folder is empty or inaccessible.
+fn get_mod_latest_mtime(mod_path: &Path) -> Option<u64> {
+    let mut max_mtime: u64 = 0;
+    fn walkdir(dir: &Path, max_mtime: &mut u64) {
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walkdir(&path, max_mtime);
+                } else if let Ok(meta) = entry.metadata() {
+                    if let Ok(mtime) = meta.modified() {
+                        let duration = mtime
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default();
+                        let ms = duration.as_millis() as u64;
+                        if ms > *max_mtime {
+                            *max_mtime = ms;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    walkdir(mod_path, &mut max_mtime);
+    if max_mtime == 0 {
+        None
+    } else {
+        Some(max_mtime)
+    }
+}
+
 fn dir_size(path: &Path) -> u64 {
     let mut size = 0u64;
     if let Ok(entries) = fs::read_dir(path) {
@@ -160,6 +197,8 @@ fn try_parse_mod(full_path: &Path, item_name: &str, enabled: bool) -> Option<Mod
                         path: full_path.to_string_lossy().to_string(),
                         files: entries,
                         size: dir_size(full_path),
+                        display_name: None,
+                        local_updated_at: None,
                     });
                 }
             }
@@ -219,6 +258,8 @@ fn try_parse_mod(full_path: &Path, item_name: &str, enabled: bool) -> Option<Mod
                     path: parent.to_string_lossy().to_string(),
                     files,
                     size: total_size,
+                    display_name: None,
+                    local_updated_at: None,
                 });
             }
         }
@@ -274,6 +315,28 @@ pub fn scan_mods_internal(game_path: &str) -> Vec<ModInfo> {
         let b_name = b.name.as_deref().unwrap_or("");
         a_name.to_lowercase().cmp(&b_name.to_lowercase())
     });
+
+    // Load display names from translations.json
+    let translations = translations_load();
+    let display_names = translations
+        .get("_mod_display_names")
+        .and_then(|v| v.as_object())
+        .map(|o| o.clone())
+        .unwrap_or_default();
+    let _updated_at_map = translations
+        .get("_mod_updated_at")
+        .and_then(|v| v.as_object())
+        .map(|o| o.clone())
+        .unwrap_or_default();
+
+    // Populate display_name and local_updated_at for each mod
+    for mod_info in mods.iter_mut() {
+        let key = mod_info.instance_key.clone();
+        if let Some(name) = display_names.get(&key).and_then(|v| v.as_str()) {
+            mod_info.display_name = Some(name.to_string());
+        }
+        mod_info.local_updated_at = get_mod_latest_mtime(Path::new(&mod_info.instance_key));
+    }
 
     mods
 }
