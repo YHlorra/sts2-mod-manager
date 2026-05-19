@@ -510,6 +510,21 @@ pub fn mods_uninstall(
     }
 }
 
+fn smart_extract_archive(path: &str, mods_dir: &Path) -> Result<(), String> {
+    let ext = Path::new(path)
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    match ext.as_str() {
+        "zip" => smart_extract_zip(path, mods_dir),
+        "rar" => smart_extract_rar(path, mods_dir),
+        _ => Err(format!(
+            "不支持的格式: .{}\n\n目前支持 .zip 和 .rar 格式的压缩包。",
+            ext
+        )),
+    }
+}
+
 fn smart_extract_zip(zip_path: &str, mods_dir: &Path) -> Result<(), String> {
     let ext = Path::new(zip_path)
         .extension()
@@ -517,7 +532,7 @@ fn smart_extract_zip(zip_path: &str, mods_dir: &Path) -> Result<(), String> {
         .unwrap_or_default();
     if ext != "zip" {
         return Err(format!(
-            "不支持的格式: .{}\n\n目前仅支持 .zip 格式的压缩包。\n如果是 .rar / .7z 请先解压后拖入文件夹，或转换为 .zip 格式。",
+            "不支持的格式: .{}\n\n该文件不是有效的 ZIP 格式。",
             ext
         ));
     }
@@ -649,6 +664,53 @@ fn smart_extract_zip(zip_path: &str, mods_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn smart_extract_rar(rar_path: &str, mods_dir: &Path) -> Result<(), String> {
+    use unrar::Archive;
+
+    let archive = Archive::new(rar_path).open_for_processing().map_err(|e| format!(
+        "无法读取 RAR 压缩包: {}\n\n该文件可能已损坏。",
+        e
+    ))?;
+
+    let mut archive = archive;
+    loop {
+        match archive.read_header() {
+            Ok(Some(a)) => {
+                let entry_name = a.entry().filename.to_string_lossy().into_owned();
+                let is_dir = entry_name.ends_with('/');
+
+                if is_dir {
+                    let out_path = mods_dir.join(&entry_name);
+                    let _ = fs::create_dir_all(&out_path);
+                    match a.skip() {
+                        Ok(next) => { archive = next; }
+                        Err(e) => return Err(format!("无法跳过 RAR 目录: {}", e)),
+                    }
+                } else {
+                    let out_path = mods_dir.join(&entry_name);
+                    if let Some(parent) = out_path.parent() {
+                        let _ = fs::create_dir_all(parent);
+                    }
+                    match a.extract() {
+                        Ok(next) => {
+                            // unrar extracts to CWD with full path preserved (e.g., "MyMod/file.dll" -> "./MyMod/file.dll")
+                            let extracted_path = Path::new(".").join(&entry_name);
+                            if extracted_path.exists() && extracted_path != out_path {
+                                let _ = fs::rename(&extracted_path, &out_path);
+                            }
+                            archive = next;
+                        }
+                        Err(e) => return Err(format!("无法解压 RAR 文件: {}", e)),
+                    }
+                }
+            }
+            Ok(None) => break, // End of archive
+            Err(e) => return Err(format!("读取 RAR 头部失败: {}", e)),
+        }
+    }
+    Ok(())
+}
+
 fn install_folder(folder_path: &str, mods_dir: &Path) -> Result<(), String> {
     let src = Path::new(folder_path);
     if !src.is_dir() {
@@ -699,7 +761,7 @@ pub async fn mods_install(
     let files = dialog
         .file()
         .set_title("Select MOD Archive")
-        .add_filter("Archives", &["zip"])
+        .add_filter("Archives", &["zip", "rar"])
         .blocking_pick_files();
 
     let file_paths = match files {
@@ -721,7 +783,7 @@ pub async fn mods_install(
         let result = if p.is_dir() {
             install_folder(&path_str, &mods_dir)
         } else {
-            smart_extract_zip(&path_str, &mods_dir)
+            smart_extract_archive(&path_str, &mods_dir)
         };
         if let Err(e) = result {
             return Ok(ModResult {
@@ -772,7 +834,7 @@ pub fn mods_install_drop(
         let result = if p.is_dir() {
             install_folder(fp, &mods_dir)
         } else {
-            smart_extract_zip(fp, &mods_dir)
+            smart_extract_archive(fp, &mods_dir)
         };
         if let Err(e) = result {
             return ModResult {
@@ -927,7 +989,7 @@ pub async fn mods_restore(
     match file {
         Some(path) => {
             let path_str = path.to_string();
-            if let Err(e) = smart_extract_zip(&path_str, &mods_dir) {
+            if let Err(e) = smart_extract_archive(&path_str, &mods_dir) {
                 return Ok(ModResult {
                     success: false,
                     error: Some(e),
