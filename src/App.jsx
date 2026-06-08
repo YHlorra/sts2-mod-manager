@@ -51,6 +51,21 @@ export default function App() {
     if (window.api.loadTranslations) window.api.loadTranslations().then(setTranslations);
   }, []);
 
+  // Intercept <a target="_blank"> clicks and route through the OS-default browser.
+  // Works for both Electron and Tauri: both expose window.api.openUrl → shell.openExternal / opener::open_browser.
+  // Without this, Electron silently denies target="_blank" and Tauri's webview pops a window or does nothing.
+  useEffect(() => {
+    const handler = (e) => {
+      const a = e.target?.closest?.('a[target="_blank"]');
+      if (!a || !a.href) return;
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      if (window.api?.openUrl) window.api.openUrl(a.href);
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
+
   const handleLaunchGame = async () => {
     if (gameState !== 'idle') return;
     const result = await window.api.launchGame();
