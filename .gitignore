@@ -3,10 +3,19 @@ release/
 dist/win-unpacked/
 dist/builder-debug.yml
 dist/*.exe
+dist/*.7z
 test_*.js
 *.zip
 .DS_Store
 Thumbs.db
+
+# OMC / CodeGraph tooling state (auto-regenerated, not source)
+.omc/
+.codegraph/
+
+# Local build logs
+/build*.log
+/build_tauri_*.log
 
 # Tauri
 src-tauri/target/

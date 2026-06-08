@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd \\\"E:/Desktop/workspace/sts2-mod-manager\\\" && git add -A && git commit -m \\\"$(cat <<'EOF'\\nfeat: add 7z support and smart-replace fix\\n\\n- add os module, node-7z dependency\\n- smartExtra...",
-  "error": "Exit code 2\n/usr/bin/bash: line 23: warning: here-document at line 12 delimited by end-of-file (wanted `EOF')\n/usr/bin/bash: eval: line 24: unexpected EOF while looking for matching `)'",
-  "timestamp": "2026-05-16T15:44:59.678Z",
-  "retry_count": 1
-}
