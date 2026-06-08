@@ -32,3 +32,13 @@ builds/
 .dolt/
 *.db
 .beads-credential-key
+
+# Claude Code local config (per-developer; not for GitHub)
+.claude/
+
+# Dev scripts / planning docs / tracking artifacts (untracked, not source)
+init.sh
+run-electron.bat
+.planning/
+feature_list.json
+nexus-mods-listing.md
